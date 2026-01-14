@@ -1,17 +1,3 @@
-fastapi
-seaborn
-uvicorn
-pandas
-numpy
-matplotlib
-pickle
 streamlit
-xgboost
-optuna
-functools
-typing
-sklearn.processing
-sklearn.metrics
-sklearn.model_selection
-os
-plotly.express as px
+pandas
+plotly
