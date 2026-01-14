@@ -29,9 +29,9 @@ def load_data():
         return None
 
 # --- INTERFACE PRINCIPAL ---
-st.title("🏦 One Bank - Análise Bivariada de Churn")
+st.title("🏦 One Bank - Análise de Churn de Clientes")
 st.markdown("""
-Este dashboard carrega automaticamente os dados de Churn bancário para análise exploratória.
+#### Este dashboard interativo reproduz as análises a luz dos dados do dataset, permitindo explorar como diferentes variáveis impactam a decisão do cliente de sair do banco (Churn).
 """)
 
 # Carrega os dados
