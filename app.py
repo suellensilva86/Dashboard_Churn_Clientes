@@ -13,7 +13,7 @@ st.set_page_config(
 # Carregamento dos dados
 @st.cache_data
 def load_data():
-    df = pd.read_csv('data/Customer-Churn-Records.csv')
+    df = pd.read_csv('Customer-Churn-Records.csv')
     return df
 
 df = load_data()
