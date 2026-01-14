@@ -13,14 +13,6 @@ st.set_page_config(
 # Carrega os dados
 df = load_data()
 
-# --- CORREÇÃO DE SEGURANÇA ---
-# Se por acaso o cache trouxe os dados sem a coluna 'Status', criamos ela agora:
-if df is not None:
-    if 'Status' not in df.columns:
-        df['Status'] = df['Exited'].map({0: 'Não Churn', 1: 'Churn'})
-
-# --- FIM DA CORREÇÃO ---
-
 if df is not None:
     # Definição de Variáveis
     target = 'Status'
