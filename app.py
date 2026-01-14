@@ -3,8 +3,12 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-# Configuração da página
-st.set_page_config(page_title="Dashboard de Churn de Clientes", layout="wide")
+# Configuração da Página
+st.set_page_config(
+    page_title="One Bank - Dashboard de Análise de Churn",
+    page_icon="🏦",
+    layout="wide"
+)
 
 # Carregamento dos dados
 @st.cache_data
@@ -14,91 +18,194 @@ def load_data():
 
 df = load_data()
 
-# Título do Dashboard
-st.title("📊 Dashboard de Análise de Churn (Retenção de Clientes)")
-st.markdown("Esta aplicação analisa o comportamento dos clientes e identifica padrões de cancelamento (churn).")
 
-# SIDEBAR (Filtros)
-st.sidebar.header("Filtros")
-geography = st.sidebar.multiselect(
-    "Selecione o País:",
-    options=df["Geography"].unique(),
-    default=df["Geography"].unique()
-)
+# --- ESTILOS E CORES (Baseado no Notebook) ---
+COLOR_CHURN = "#106EBE"  # Azul
+COLOR_NO_CHURN = "#0FFCBE"  # Menta
+TEMPLATE = "plotly_white"
 
-gender = st.sidebar.multiselect(
-    "Selecione o Gênero:",
-    options=df["Gender"].unique(),
-    default=df["Gender"].unique()
-)
 
-card_type = st.sidebar.multiselect(
-    "Tipo de Cartão:",
-    options=df["Card Type"].unique(),
-    default=df["Card Type"].unique()
-)
+# --- FUNÇÕES ---
+@st.cache_data
+def load_data(file):
+    if file is not None:
+        df = pd.read_csv(file)
+    else:
+        return None
 
-# Aplicando filtros
-df_selection = df.query(
-    "Geography == @geography & Gender == @gender & `Card Type` == @card_type"
-)
+    # Mapeamento da variável alvo (EXITED) para melhor visualização 
+    if 'Exited' in df.columns:
+        df['Status'] = df['Exited'].map({0: 'Não Churn', 1: 'Churn'})
+    return df
 
-#  MÉTRICAS PRINCIPAIS
-total_clientes = df_selection.shape[0]
-churn_percent = (df_selection["Exited"].mean() * 100)
-media_satisfaction = df_selection["Satisfaction Score"].mean()
-media_balance = df_selection["Balance"].mean()
 
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Total de Clientes", f"{total_clientes}")
-col2.metric("Taxa de Churn", f"{churn_percent:.1f}%")
-col3.metric("Satisfação Média", f"{media_satisfaction:.2f} / 5")
-col4.metric("Saldo Médio", f"${media_balance:,.2f}")
+# --- INTERFACE PRINCIPAL ---
+st.title("🏦 One Bank - Análise de Churn de Clientes")
+st.markdown("""
+#### Este dashboard interativo reproduz as análises a luz dos dados do dataset, permitindo explorar como diferentes variáveis impactam a decisão do cliente de sair do banco (**Churn**).
+""")
 
-st.markdown("""---""")
 
-# GRÁFICOS
-col_left, col_right = st.columns(2)
+if df is not None:
+    # Definição de Variáveis
+    target = 'Status'
 
-# Churn por Geografia
-with col_left:
-    st.subheader("Churn por País")
-    churn_geo = df_selection.groupby("Geography")["Exited"].mean().reset_index()
-    fig_geo = px.bar(churn_geo, x="Geography", y="Exited",
-                     title="Taxa de Churn por Localização",
-                     labels={"Exited": "Taxa de Churn", "Geography": "País"},
-                     color="Geography", text_auto='.2%')
-    st.plotly_chart(fig_geo, use_container_width=True)
+    # Variáveis Categóricas e Numéricas
+    cat_cols = ['Geography', 'Gender', 'HasCrCard', 'IsActiveMember', 'Card Type', 'Complain']
+    num_cols = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'EstimatedSalary', 'Satisfaction Score',
+                'Point Earned']
 
-# Distribuição de Idade por Churn
-with col_right:
-    st.subheader("Distribuição de Idade")
-    fig_age = px.histogram(df_selection, x="Age", color="Exited",
-                           title="Idade vs. Churn (0=Ficou, 1=Saiu)",
-                           nbins=30, barmode="group",
-                           color_discrete_map={0: "#636EFA", 1: "#EF553B"})
-    st.plotly_chart(fig_age, use_container_width=True)
+    # --- MENU DE NAVEGAÇÃO ---
+    analysis_type = st.radio(
+        "Selecione o Tipo de Análise:",
+        ["Variáveis Categóricas x Churn", "Variáveis Numéricas x Churn"],
+        horizontal=True
+    )
 
-col_left2, col_right2 = st.columns(2)
+    st.markdown("---")
 
-# Churn por Tipo de Cartão
-with col_left2:
-    st.subheader("Churn por Tipo de Cartão")
-    fig_card = px.pie(df_selection, names="Card Type", values="Exited",
-                      title="Proporção de Churn por Categoria de Cartão",
-                      hole=0.4)
-    st.plotly_chart(fig_card, use_container_width=True)
+    # --- ANÁLISE CATEGÓRICA ---
+    if analysis_type == "Variáveis Categóricas x Churn":
+        col1, col2 = st.columns([1, 3])
 
-# Score de Crédito vs Salário Estimado
-with col_right2:
-    st.subheader("Crédito vs Salário")
-    fig_scatter = px.scatter(df_selection.sample(min(len(df_selection), 1000)),
-                             x="CreditScore", y="EstimatedSalary",
-                             color="Exited", size="Age",
-                             title="Amostra: Crédito vs Salário (Tamanho = Idade)",
-                             opacity=0.6)
-    st.plotly_chart(fig_scatter, use_container_width=True)
+        with col1:
+            st.subheader("Configuração")
+            selected_cat = st.selectbox("Escolha uma variável categórica:", cat_cols)
 
-# TABELA DE DADOS
-if st.checkbox("Mostrar Dados Brutos"):
-    st.dataframe(df_selection)
+            # Cálculo de Taxa de Churn
+            churn_rate = df.groupby(selected_cat)['Exited'].mean().sort_values(ascending=False) * 100
+
+            st.write(f"**Taxa de Churn por {selected_cat}:**")
+            st.dataframe(churn_rate.apply(lambda x: f"{x:.2f}%"), use_container_width=True)
+
+        with col2:
+            st.subheader(f"Distribuição de Churn por {selected_cat}")
+
+            # Gráfico de Barras Empilhadas ou Agrupadas
+            fig_cat = px.histogram(
+                df,
+                x=selected_cat,
+                color=target,
+                barmode='group',
+                color_discrete_map={'Churn': COLOR_CHURN, 'Não Churn': COLOR_NO_CHURN},
+                template=TEMPLATE,
+                text_auto=True,
+                title=f"Contagem de Clientes: {selected_cat} vs Churn"
+            )
+            fig_cat.update_layout(yaxis_title="Número de Clientes", xaxis_title=selected_cat)
+            st.plotly_chart(fig_cat, use_container_width=True)
+
+            # Gráfico de Proporção
+            st.markdown(f"**Proporção Relativa (%)**")
+            df_prop = pd.crosstab(df[selected_cat], df[target], normalize='index').reset_index()
+            fig_prop = px.bar(
+                df_prop,
+                x=selected_cat,
+                y=['Não Churn', 'Churn'],
+                color_discrete_map={'Churn': COLOR_CHURN, 'Não Churn': COLOR_NO_CHURN},
+                template=TEMPLATE,
+                title=f"Percentual de Churn por {selected_cat}"
+            )
+            fig_prop.update_layout(yaxis_title="Proporção", xaxis_title=selected_cat, legend_title="Status")
+            st.plotly_chart(fig_prop, use_container_width=True)
+
+            # --- ANÁLISE NUMÉRICA ---
+    elif analysis_type == "Variáveis Numéricas x Churn":
+            col1, col2 = st.columns([1, 3])
+
+            with col1:
+                st.subheader("Configuração")
+                selected_num = st.selectbox("Escolha uma variável numérica:", num_cols)
+
+                # Escolha do tipo de gráfico
+                viz_type = st.radio(
+                    "Tipo de Visualização:",
+                    [
+                        "Comparação de Médias (Barras)",
+                        "Distribuição (Histograma/Densidade)",
+                        "Dispersão (Scatter Plot)",
+                        "Detalhado (Boxplot)"
+                    ]
+                )
+
+                # Estatísticas rápidas
+                avg_churn = df[df['Exited'] == 1][selected_num].mean()
+                avg_no_churn = df[df['Exited'] == 0][selected_num].mean()
+                diff_pct = ((avg_churn - avg_no_churn) / avg_no_churn) * 100
+
+                st.markdown("---")
+                st.metric(label=f"Média (Churn)", value=f"{avg_churn:.2f}")
+                st.metric(label=f"Média (Não Churn)", value=f"{avg_no_churn:.2f}", delta=f"{diff_pct:.1f}% vs Churn")
+
+            with col2:
+                st.subheader(f"Análise de {selected_num} vs Churn")
+
+                # OPÇÃO 1: GRÁFICO DE BARRAS (MÉDIAS)
+                if viz_type == "Comparação de Médias (Barras)":
+                    st.markdown(
+                        f"**O que este gráfico mostra:** Compara o valor médio de *{selected_num}* entre quem saiu e quem ficou.")
+                    df_mean = df.groupby(target)[selected_num].mean().reset_index()
+                    fig_bar = px.bar(
+                        df_mean, x=target, y=selected_num, color=target, text_auto='.2s',
+                        color_discrete_map={'Churn': COLOR_CHURN, 'Não Churn': COLOR_NO_CHURN},
+                        template=TEMPLATE, title=f"Média de {selected_num} por Status"
+                    )
+                    fig_bar.update_layout(showlegend=False)
+                    st.plotly_chart(fig_bar, use_container_width=True)
+
+                # OPÇÃO 2: HISTOGRAMA / DENSIDADE
+                elif viz_type == "Distribuição (Histograma/Densidade)":
+                    st.markdown(f"**O que este gráfico mostra:** Onde se concentram a maioria dos clientes.")
+                    fig_hist = px.histogram(
+                        df, x=selected_num, color=target, barmode="overlay",
+                        histnorm='probability density', opacity=0.6,
+                        color_discrete_map={'Churn': COLOR_CHURN, 'Não Churn': COLOR_NO_CHURN},
+                        template=TEMPLATE, title=f"Distribuição de {selected_num} (Curva de Densidade)"
+                    )
+                    fig_hist.update_layout(yaxis_title="Densidade / Frequência", xaxis_title=selected_num)
+                    st.plotly_chart(fig_hist, use_container_width=True)
+
+                # OPÇÃO 3: SCATTER PLOT 
+                elif viz_type == "Dispersão (Scatter Plot)":
+                    st.markdown("**Análise de Dispersão:**")
+                    scatter_mode = st.radio(
+                        "Escolha o modo:",
+                        ["Visualizar Distribuição (Strip Plot)", "Cruzar com outra Variável (Scatter Bivariado)"],
+                        horizontal=True
+                    )
+
+                    if scatter_mode == "Visualizar Distribuição (Strip Plot)":
+                        st.markdown(f"*Mostra cada cliente como um ponto. Ajuda a ver a densidade real dos dados.*")
+                        fig_strip = px.strip(
+                            df, x=target, y=selected_num, color=target, stripmode='overlay',
+                            color_discrete_map={'Churn': COLOR_CHURN, 'Não Churn': COLOR_NO_CHURN},
+                            template=TEMPLATE, title=f"Distribuição de Pontos: {selected_num}"
+                        )
+                        st.plotly_chart(fig_strip, use_container_width=True)
+
+                    else:  # Scatter Bivariado
+                        st.markdown(f"*Cruze '{selected_num}' com outra variável para encontrar padrões.*")
+                        # Remove a variável atual da lista para não comparar com ela mesma
+                        other_cols = [c for c in num_cols if c != selected_num]
+                        var_y = st.selectbox("Selecione a 2ª Variável (Eixo Y):", other_cols)
+
+                        fig_scat = px.scatter(
+                            df, x=selected_num, y=var_y, color=target,
+                            color_discrete_map={'Churn': COLOR_CHURN, 'Não Churn': COLOR_NO_CHURN},
+                            template=TEMPLATE, opacity=0.6,
+                            title=f"Relação: {selected_num} vs {var_y}"
+                        )
+                        st.plotly_chart(fig_scat, use_container_width=True)
+
+                # OPÇÃO 4: BOXPLOT
+                else:
+                    st.markdown(f"**O que este gráfico mostra:** Detalhes estatísticos (medianas e quartis).")
+                    fig_box = px.box(
+                        df, x=target, y=selected_num, color=target,
+                        color_discrete_map={'Churn': COLOR_CHURN, 'Não Churn': COLOR_NO_CHURN},
+                        template=TEMPLATE, title=f"Boxplot de {selected_num}"
+                    )
+                    st.plotly_chart(fig_box, use_container_width=True)
+# --- RODAPÉ ---
+st.markdown("---")
+st.markdown("Desenvolvido com Streamlit")
